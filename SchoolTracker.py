@@ -163,11 +163,11 @@ def parse_rating(file):
       # Extract school's number
       nums = re.findall(r'\b[0-9]+\b', name)
       if not nums:
-        warn("missing school number: %s" % name)
+#        warn("missing school number: %s" % name)
         num = None
       elif len(nums) > 1:
-        warn("too many school numbers, school will be ignored: %s" % name)
-        continue
+#        warn("too many school numbers: %s" % name)
+        num = None
       else:
         num = int(nums[0])
       schools.append(School(name, city, num, goodness))
@@ -331,7 +331,13 @@ Examples:
     error("failed to parse config file %s" % args.settings_file)
 
   schools, idx = parse_rating(args.rating_file)
+  num_all_schools = len(schools)
   schools = list(filter(lambda s: 'Москва' in s.city, schools))
+  num_moscow_schools = len(schools)
+  if num_all_schools != num_moscow_schools:
+    warn("filtered %d non-Moscow"
+         "schools (out of %d)" % (num_all_schools - num_moscow_schools,
+                                  num_all_schools))
   for s in schools:
     locate_school(s, cfg)
 
