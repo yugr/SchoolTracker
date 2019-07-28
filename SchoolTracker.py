@@ -15,6 +15,7 @@ import subprocess
 import argparse
 import json
 import atexit
+import pprint
 
 import imp, site
 
@@ -52,6 +53,9 @@ import requests
 
 ensure_module('configparser', user=True)
 import configparser
+
+ensure_module('kdtree', user=True)
+import kdtree
 
 me = os.path.basename(__file__)
 v = 0
@@ -96,24 +100,29 @@ class Re:
     return self._last_match.groups(*args, **kwargs)
 
 class School:
-  def __init__(self, name, location, number, goodness):
+  def __init__(self, name, city, number, goodness):
     self.name = name
-    self.location = location
+    self.city = city
     self.number = number
     self.goodness = goodness
     self.address = None
     self.coords = None
+    self.station = None
 
   def __str__(self):
     parts = []
-    parts.append("#%s: \"%s\" (@%s, rating %d" % (self.number if self.number is not None else '?',
-                                                  self.name, self.location, self.goodness))
+    parts.append("\"%s\" (rating %s" % (self.name, self.goodness))
+    if self.number is not None:
+      parts.append("#%d" % self.number)
+    if self.address is None:
+      parts.append("@" + self.city)
+    else:
+      parts.append("@%s" % self.address)
     if self.coords is not None:
       parts.append(", xy: %g %g" % (self.coords[0], self.coords[1]))
-    if self.address is not None:
-      parts.append(', "%s"' % self.address)
-    parts.append(')')
-    return ''.join(parts)
+    if self.station is not None:
+      parts.append(", metro \"%s\"" % self.station)
+    return ', '.join(parts) + ')'
 
 def parse_rating(file):
   idx = {}
@@ -127,30 +136,30 @@ def parse_rating(file):
         continue
       place += 1
       # Parse line
-      goodness = name = location = None
+      goodness = name = city = None
       if Re.match(r'^([0-9]+)\. +(.*) +\(([+-][0-9]+)\) *$', line):
         # Official rating (from schoolotzyv.ru)
         #   1. Школа №1535 (+1)
         goodness = int(Re.group(1))
         name = Re.group(2)
-        location = 'Москва'
+        city = 'Москва'
       elif Re.match(r'^(.*)\t([0-9]+)$', line):
         # Non-official rating from schoolotzyv.ru
         #   Школа №179 Москва	94
         goodness = int(Re.group(2))
         name = Re.group(1)
-        location = 'Москва'
+        city = 'Москва'
       elif Re.match(r'^[0-9]+[ \t]+([^\t]+)\t+([^\t]+\t+[^\t]+)\t+([0-9,]+)', line):
         # RAEX rating
         #   1 	Лицей НИУ ВШЭ 	Москва 	Москва 	1000,00
         name = Re.group(1)
-        location = Re.group(2)
+        city = Re.group(2)
         goodness = float(Re.group(3).replace(',', '.'))
       else:
         warn("failed to parse school info:\n  %s" % line)
         continue
       name = re.sub(r'\s+', ' ', name.strip())
-      location = re.sub(r'\s+', ' ', location.strip())
+      city = re.sub(r'\s+', ' ', city.strip())
       # Extract school's number
       nums = re.findall(r'\b[0-9]+\b', name)
       if not nums:
@@ -161,7 +170,7 @@ def parse_rating(file):
         continue
       else:
         num = int(nums[0])
-      schools.append(School(name, location, num, goodness))
+      schools.append(School(name, city, num, goodness))
       if num is not None:
         idx[num] = schools[-1]
   return schools, idx
@@ -200,7 +209,7 @@ def locate_school(s, cfg):
     atexit.register(save_locations, cache, cache_file)
   cache = getattr(locate_school, 'cache')
 
-  query = s.name + ' ' + s.location
+  query = s.name + ' ' + s.city
   if query in cache:
     if v:
       sys.stderr.write("Reading from cache: '%s'\n" % query)
@@ -210,14 +219,14 @@ def locate_school(s, cfg):
       sys.stderr.write("Not in cache: '%s'\n" % query)
 #    params = {
 #      'apikey'  : cfg['API']['jsapi_key'],
-#      'geocode' : s.name + ' ' + s.location,
+#      'geocode' : query,
 #      'format' : 'json',
 #      'lang' : 'en_RU',
 #    }
 
     params = {
-      'apikey'  : cfg['API']['search_api_key'],
-      'text' : s.name + ' ' + s.location,
+      'apikey' : cfg['API']['search_api_key'],
+      'text' : query,
       'type' : 'biz',
       'lang' : 'ru_RU',
       'll'   : '37.618920,55.756994',
@@ -247,6 +256,43 @@ def locate_school(s, cfg):
 
   s.address = address
   s.coords = coords
+
+class Station:
+  def __init__(self, name, line, coords):
+    self.name = name
+    self.line = line
+    self.coords = coords
+
+  def __str__(self):
+    return "%s (%s, @%g %g)" % (self.name, self.line,
+                                self.coords[0], self.coords[1])
+
+  # For kdtree
+  def __len__(self):
+    return len(self.coords)
+
+  # For kdtree
+  def __getitem__(self, i):
+    return self.coords[i]
+
+def load_metro_map(metro_file):
+  stations = []
+  with open(metro_file, 'r') as f:
+    data = json.load(f)
+  for line in data['lines']:
+    for station in line['stations']:
+      coords = [float(station['lng']), float(station['lat'])]
+      s = Station(station['name'], line['name'], coords)
+      stations.append(s)
+  metro_map = kdtree.create(stations)
+  return stations, metro_map
+
+def assign_metros(schools, station_map):
+  for s in schools:
+    # Spherical coords are not Euclidean but ok for out purposes
+    tree, _ = station_map.search_nn(s.coords)
+    assert tree, "failed to locate station"
+    s.station = tree.data
 
 def main():
   parser = argparse.ArgumentParser(description="A helper tool to visualize info about public schools in Moscow.",
@@ -285,9 +331,17 @@ Examples:
     error("failed to parse config file %s" % args.settings_file)
 
   schools, idx = parse_rating(args.rating_file)
-  schools = list(filter(lambda s: 'Москва' in s.location, schools))
+  schools = list(filter(lambda s: 'Москва' in s.city, schools))
   for s in schools:
     locate_school(s, cfg)
+
+  stations, station_map = load_metro_map('maps/moscow_metro.json')
+
+#  print("Stations:")
+#  for s in stations:
+#    print("  %s" % s)
+
+  assign_metros(schools, station_map)
 
   print("Schools:")
   for s in schools:
