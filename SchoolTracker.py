@@ -171,22 +171,43 @@ def _print_response(r):
   sys.stderr.write('%s\n' % s)
 
 def load_locations(file):
-  return {}  # TODO
+  cache = {}
+  with open(file, 'r') as f:
+    i = iter(f)
+    for line in f:
+      query = line.strip()
+      if not query:
+          break
+      address = next(i).strip()
+      coords = eval(next(i).strip())
+      cache[query] = address, coords
+  return cache
 
 def save_locations(cache, file):
-  pass  # TODO
+  with open(file, 'w') as f:
+    for query, (address, coords) in sorted(cache.items()):
+      f.write('%s\n%s\n%s\n' % (query, address, coords))
 
 def locate_school(s, cfg):
   if not hasattr(locate_school, 'cache'):
     # TODO: read cache from curdir
-    cache = load_locations('coords.txt')
+    cache_file = 'coords.txt'
+    if os.path.exists(cache_file):
+      cache = load_locations(cache_file)
+    else:
+      cache = {}
     setattr(locate_school, 'cache', cache)
-    atexit.register(save_locations, cache, 'coords.txt')
+    atexit.register(save_locations, cache, cache_file)
   cache = getattr(locate_school, 'cache')
 
-  if (s.name, s.location) in cache:
-    address, coords = cache[s.name, s.location]
+  query = s.name + ' ' + s.location
+  if query in cache:
+    if v:
+      sys.stderr.write("Reading from cache: '%s'\n" % query)
+    address, coords = cache[query]
   else:
+    if v:
+      sys.stderr.write("Not in cache: '%s'\n" % query)
 #    params = {
 #      'apikey'  : cfg['API']['jsapi_key'],
 #      'geocode' : s.name + ' ' + s.location,
@@ -222,7 +243,7 @@ def locate_school(s, cfg):
     res0 = r['features'][0]
     address = res0['properties']['description']
     coords = res0['geometry']['coordinates']
-    cache[s.name, s.location] = address, coords
+    cache[query] = address, coords
 
   s.address = address
   s.coords = coords
