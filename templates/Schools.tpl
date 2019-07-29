@@ -7,7 +7,7 @@
         Укажите свой API-ключ. Тестовый ключ НЕ БУДЕТ работать на других сайтах.
         Получить ключ можно в Кабинете разработчика: https://developer.tech.yandex.ru/keys/
     -->
-    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&amp;apikey=a019b9ef-84af-44f9-85af-887678472c39" type="text/javascript"></script>
+    <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&amp;apikey=${API_KEY}" type="text/javascript"></script>
     <script src="marks.js" type="text/javascript"></script>
 	<style>
         html, body, #map {

@@ -16,6 +16,7 @@ import argparse
 import json
 import atexit
 import pprint
+import string
 
 import imp, site
 
@@ -318,44 +319,45 @@ def rating_to_color(r, rmin, rmax):
     C.append(c)
   return '%02x%02x%02x' % (*C,)
 
-def gen_js_code(schools, js_file):
-  "Generate JS code with marks for Yandex map."
-  with open(js_file, 'w') as f:
-    f.write('''\
-ymaps.ready(init);
+def generate_webpage(schools, html_file, js_file, cfg):
+  "Generate Yandex map with marks."
 
-function init() {
-    var myMap = new ymaps.Map("map", {
-            center: [55.76, 37.64],
-            zoom: 10
-        }, {
-            searchControlProvider: 'yandex#search'
-        });
+  # HTML
 
-    myMap.geoObjects
-''')
-    rmin = float('Inf')
-    rmax = float('-Inf')
-    for s in schools:
-      rmin = min(rmin, s.rating)
-      rmax = max(rmax, s.rating)
-    for s in schools:
-      f.write('''\
-        .add(new ymaps.Placemark([%g, %g], {
-            iconCaption: '%s',
-            balloonContent: 'Рейтинг %s, %s'
-        }, {
-            preset: 'islands#greenDotIconWithCaption',
-            iconColor: '#%s'
-        }))
+  with open('templates/Schools.tpl', 'r') as t:
+    html_code = string.Template(t.read()).substitute(API_KEY=cfg['API']['jsapi_key'])
+
+  with open(html_file, 'w') as f:
+    f.write(html_code)
+
+  # JS
+
+  parts = []
+  rmin = float('Inf')
+  rmax = float('-Inf')
+  for s in schools:
+    rmin = min(rmin, s.rating)
+    rmax = max(rmax, s.rating)
+  for s in schools:
+    parts.append('''\
+      .add(new ymaps.Placemark([%g, %g], {
+          iconCaption: '%s',
+          balloonContent: 'Рейтинг %s, %s'
+      }, {
+          preset: 'islands#greenDotIconWithCaption',
+          iconColor: '#%s'
+      }))
 ''' % (s.coords[1], s.coords[0],
        s.number if s.number is not None else s.name,
        s.rating,
        s.address,
        rating_to_color(s.rating, rmin, rmax)))
-    f.write('''\
-  ;
-}''')
+
+  with open('templates/marks.js.tpl', 'r') as t:
+    js_code = string.Template(t.read()).substitute(MARKS=''.join(parts))
+
+  with open(js_file, 'w') as f:
+    f.write(js_code)
 
 def main():
   parser = argparse.ArgumentParser(description="A helper tool to visualize info about public schools in Moscow.",
@@ -418,7 +420,7 @@ Examples:
 
   # TODO: sort schools by station
 
-  gen_js_code(schools, 'www/marks.js')
+  generate_webpage(schools, 'Schools.html', 'marks.js', cfg)
 
   return 0
 
