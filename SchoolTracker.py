@@ -100,6 +100,8 @@ class Re:
     return self._last_match.groups(*args, **kwargs)
 
 class School:
+  "Holds various info about school."
+
   def __init__(self, name, city, number, rating):
     self.name = name
     self.city = city
@@ -175,11 +177,8 @@ def parse_rating(file):
         idx[num] = schools[-1]
   return schools, idx
 
-def _print_response(r):
-  s = json.dumps(r, sort_keys=True, indent=4, separators=(',', ': '))
-  sys.stderr.write('%s\n' % s)
-
 def load_locations(file):
+  "Load query cache from disk."
   cache = {}
   with open(file, 'r') as f:
     i = iter(f)
@@ -193,11 +192,19 @@ def load_locations(file):
   return cache
 
 def save_locations(cache, file):
+  "Save query cache to disk."
   with open(file, 'w') as f:
     for query, (address, coords) in sorted(cache.items()):
       f.write('%s\n%s\n%s\n' % (query, address, coords))
 
+def _print_response(r):
+  "Helper for debug print."
+  s = json.dumps(r, sort_keys=True, indent=4, separators=(',', ': '))
+  sys.stderr.write('%s\n' % s)
+
 def locate_school(s, cfg):
+  "Find school location via Yandex API."
+
   if not hasattr(locate_school, 'cache'):
     # TODO: read cache from curdir
     cache_file = 'coords.txt'
@@ -258,6 +265,8 @@ def locate_school(s, cfg):
   s.coords = coords
 
 class Station:
+  "Holds info about metro station."
+
   def __init__(self, name, line, coords):
     self.name = name
     self.line = line
@@ -276,6 +285,7 @@ class Station:
     return self.coords[i]
 
 def load_metro_map(metro_file):
+  "Loads metro info from disk."
   stations = []
   with open(metro_file, 'r') as f:
     data = json.load(f)
@@ -288,6 +298,7 @@ def load_metro_map(metro_file):
   return stations, metro_map
 
 def assign_metros(schools, station_map):
+  "Find nearest metro for each school."
   for s in schools:
     # Spherical coords are not Euclidean but ok for out purposes
     tree, _ = station_map.search_nn(s.coords)
@@ -295,6 +306,7 @@ def assign_metros(schools, station_map):
     s.station = tree.data
 
 def rating_to_color(r, rmin, rmax):
+  "Helper for gen_js_code."
   alpha = float(r - rmin) / (rmax - rmin)
 #  A = (0, 0, 0)
 #  B = (255, 255, 255)
@@ -307,6 +319,7 @@ def rating_to_color(r, rmin, rmax):
   return '%02x%02x%02x' % (*C,)
 
 def gen_js_code(schools, js_file):
+  "Generate JS code with marks for Yandex map."
   with open(js_file, 'w') as f:
     f.write('''\
 ymaps.ready(init);
@@ -343,7 +356,6 @@ function init() {
     f.write('''\
   ;
 }''')
-
 
 def main():
   parser = argparse.ArgumentParser(description="A helper tool to visualize info about public schools in Moscow.",
