@@ -100,18 +100,18 @@ class Re:
     return self._last_match.groups(*args, **kwargs)
 
 class School:
-  def __init__(self, name, city, number, goodness):
+  def __init__(self, name, city, number, rating):
     self.name = name
     self.city = city
     self.number = number
-    self.goodness = goodness
+    self.rating = rating
     self.address = None
     self.coords = None
     self.station = None
 
   def __str__(self):
     parts = []
-    parts.append("\"%s\" (rating %s" % (self.name, self.goodness))
+    parts.append("\"%s\" (rating %s" % (self.name, self.rating))
     if self.number is not None:
       parts.append("#%d" % self.number)
     if self.address is None:
@@ -136,17 +136,17 @@ def parse_rating(file):
         continue
       place += 1
       # Parse line
-      goodness = name = city = None
+      rating = name = city = None
       if Re.match(r'^([0-9]+)\. +(.*) +\(([+-][0-9]+)\) *$', line):
         # Official rating (from schoolotzyv.ru)
         #   1. Школа №1535 (+1)
-        goodness = int(Re.group(1))
+        rating = -int(Re.group(1))
         name = Re.group(2)
         city = 'Москва'
       elif Re.match(r'^(.*)\t([0-9]+)$', line):
         # Non-official rating from schoolotzyv.ru
         #   Школа №179 Москва	94
-        goodness = int(Re.group(2))
+        rating = int(Re.group(2))
         name = Re.group(1)
         city = 'Москва'
       elif Re.match(r'^[0-9]+[ \t]+([^\t]+)\t+([^\t]+\t+[^\t]+)\t+([0-9,]+)', line):
@@ -154,7 +154,7 @@ def parse_rating(file):
         #   1 	Лицей НИУ ВШЭ 	Москва 	Москва 	1000,00
         name = Re.group(1)
         city = Re.group(2)
-        goodness = float(Re.group(3).replace(',', '.'))
+        rating = float(Re.group(3).replace(',', '.'))
       else:
         warn("failed to parse school info:\n  %s" % line)
         continue
@@ -170,7 +170,7 @@ def parse_rating(file):
         num = None
       else:
         num = int(nums[0])
-      schools.append(School(name, city, num, goodness))
+      schools.append(School(name, city, num, rating))
       if num is not None:
         idx[num] = schools[-1]
   return schools, idx
@@ -294,6 +294,57 @@ def assign_metros(schools, station_map):
     assert tree, "failed to locate station"
     s.station = tree.data
 
+def rating_to_color(r, rmin, rmax):
+  alpha = float(r - rmin) / (rmax - rmin)
+#  A = (0, 0, 0)
+#  B = (255, 255, 255)
+  A = (255, 255, 255)
+  B = (255, 0, 0)
+  C = []
+  for a, b in zip(A, B):
+    c = round(b * alpha + a * (1 - alpha))
+    C.append(c)
+  return '%02x%02x%02x' % (*C,)
+
+def gen_js_code(schools, js_file):
+  with open(js_file, 'w') as f:
+    f.write('''\
+ymaps.ready(init);
+
+function init() {
+    var myMap = new ymaps.Map("map", {
+            center: [55.76, 37.64],
+            zoom: 10
+        }, {
+            searchControlProvider: 'yandex#search'
+        });
+
+    myMap.geoObjects
+''')
+    rmin = float('Inf')
+    rmax = float('-Inf')
+    for s in schools:
+      rmin = min(rmin, s.rating)
+      rmax = max(rmax, s.rating)
+    for s in schools:
+      f.write('''\
+        .add(new ymaps.Placemark([%g, %g], {
+            iconCaption: '%s',
+            balloonContent: 'Рейтинг %s, %s'
+        }, {
+            preset: 'islands#greenDotIconWithCaption',
+            iconColor: '#%s'
+        }))
+''' % (s.coords[1], s.coords[0],
+       s.number if s.number is not None else s.name,
+       s.rating,
+       s.address,
+       rating_to_color(s.rating, rmin, rmax)))
+    f.write('''\
+  ;
+}''')
+
+
 def main():
   parser = argparse.ArgumentParser(description="A helper tool to visualize info about public schools in Moscow.",
                                    formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -353,8 +404,9 @@ Examples:
   for s in schools:
     print("  %s" % s)
 
-  # TODO:
-  # * generate map/report
+  # TODO: sort schools by station
+
+  gen_js_code(schools, 'www/marks.js')
 
   return 0
 
