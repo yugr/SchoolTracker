@@ -370,6 +370,8 @@ Examples:
 #  parser.add_argument('--no-flag',
 #                      help="Inverse of --flag.",
 #                      dest='flag', action='store_false')
+  parser.add_argument('--skip-schools',
+                      help="Ignore schools that match regex.")
   parser.add_argument('--min-rating', '-m',
                       help="Only consider schools with rating above this threshold.",
                       type=float,
@@ -398,6 +400,9 @@ Examples:
   num_all_schools = len(schools)
   schools = list(filter(lambda s: 'Москва' in s.city, schools))
   schools = list(filter(lambda s: s.rating >= args.min_rating, schools))
+  if args.skip_schools:
+    skip_schools = re.compile(args.skip_schools)
+    schools = list(filter(lambda s: not skip_schools.search(s.name), schools))
   num_moscow_schools = len(schools)
   if num_all_schools != num_moscow_schools:
     warn("filtered %d non-Moscow"
