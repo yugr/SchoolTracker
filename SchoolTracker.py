@@ -122,9 +122,9 @@ class School:
     else:
       parts.append("@%s" % self.address)
     if self.coords is not None:
-      parts.append(", xy: %g %g" % (self.coords[0], self.coords[1]))
+      parts.append("xy: %g %g" % (self.coords[0], self.coords[1]))
     if self.station is not None:
-      parts.append(", metro \"%s\"" % self.station)
+      parts.append("м. %s" % self.station)
     return ', '.join(parts) + ')'
 
 def parse_rating(file):
@@ -273,8 +273,7 @@ class Station:
     self.coords = coords
 
   def __str__(self):
-    return "%s (%s, @%g %g)" % (self.name, self.line,
-                                self.coords[0], self.coords[1])
+    return "%s (%s)" % (self.name, self.line)
 
   # For kdtree
   def __len__(self):
