@@ -207,8 +207,7 @@ def locate_school(s, cfg):
   "Find school location via Yandex API."
 
   if not hasattr(locate_school, 'cache'):
-    # TODO: read cache from curdir
-    cache_file = 'coords.txt'
+    cache_file = '.cache.txt'
     if os.path.exists(cache_file):
       cache = load_locations(cache_file)
     else:
