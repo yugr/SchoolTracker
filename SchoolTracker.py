@@ -333,8 +333,8 @@ def generate_webpage(schools, html_file, js_file, cfg):
   # JS
 
   parts = []
-  rmin = float('Inf')
-  rmax = float('-Inf')
+  rmin = float('inf')
+  rmax = float('-inf')
   for s in schools:
     rmin = min(rmin, s.rating)
     rmax = max(rmax, s.rating)
@@ -372,9 +372,10 @@ Examples:
 #  parser.add_argument('--no-flag',
 #                      help="Inverse of --flag.",
 #                      dest='flag', action='store_false')
-#  parser.add_argument('--param', '-p',
-#                      help="Describe scalar parameter here.",
-#                      default='0')
+  parser.add_argument('--min-rating', '-m',
+                      help="Only consider schools with rating above this threshold.",
+                      type=float,
+                      default=float('-inf'))
 #  parser.add_argument('--multi', '-m',
 #                      help="Describe array parameter here (can be specified more than once).",
 #                      action='append')
@@ -398,6 +399,7 @@ Examples:
   schools, idx = parse_rating(args.rating_file)
   num_all_schools = len(schools)
   schools = list(filter(lambda s: 'Москва' in s.city, schools))
+  schools = list(filter(lambda s: s.rating >= args.min_rating, schools))
   num_moscow_schools = len(schools)
   if num_all_schools != num_moscow_schools:
     warn("filtered %d non-Moscow"
