@@ -106,12 +106,13 @@ class Re:
 class House:
   "Holds info about house."
 
-  def __init__(self, address, coords):
+  def __init__(self, address, lat, lng):
     self.address = address
-    self.coords = coords
+    self.lat = lat
+    self.lng = lng
 
   def __str__(self):
-    return "%s (%f, %f)" % (self.address, (self.coords[0], self.coords[1]))
+    return "%s (%f, %f)" % (self.address, self.lat, self.lng)
 
 class School:
   "Holds various info about school."
@@ -122,7 +123,7 @@ class School:
     self.number = number
     self.rating = rating
     self.address = None
-    self.coords = None
+    self.lat = self.lng = None
     self.station = None
     self.houses = []
 
@@ -135,8 +136,8 @@ class School:
       parts.append("@" + self.city)
     else:
       parts.append("@%s" % self.address)
-    if self.coords is not None:
-      parts.append("xy: %f %f" % (self.coords[0], self.coords[1]))
+    if self.lat is not None:
+      parts.append("xy: %f %f" % (self.lat, self.lng))
     if self.station is not None:
       # TODO: distance
       parts.append("м. %s" % self.station)
@@ -246,7 +247,7 @@ def locate_address(query, cfg):
     cache_only = cache_only.lower() not in ('false', '0', 'n', 'no')
     if cache_only:
       warn("address '%s' not in cache, skipping" % query)
-      return None, None
+      return None, None, None
 
 #    params = {
 #      'apikey'  : cfg['API']['jsapi_key'],
@@ -276,38 +277,40 @@ def locate_address(query, cfg):
     if r.status_code != 200:
       msg = r.json()['message']
       warn("Geocode query failed with HTTP code %d: %s" % (r.status_code, msg))
-      return None, None
+      return None, None, None
     r = r.json()
     if v:
       _print_response(r)
     if not len(r['features']):
       warn("Failed to locate '%s'" % query)
-      return None, None
+      return None, None, None
     res0 = r['features'][0]
     address = res0['properties']['description']
     coords = res0['geometry']['coordinates']
     cache[query] = address, coords
 
-  return address, coords
+  # Geocoder has longitude first
+  return address, coords[1], coords[0]
 
 class Station:
   "Holds info about metro station."
 
-  def __init__(self, name, line, coords):
+  def __init__(self, name, line, lat, lng):
     self.name = name
     self.line = line
-    self.coords = coords
+    self.lat = lat
+    self.lng = lng
 
   def __str__(self):
     return "%s (%s)" % (self.name, self.line)
 
   # For kdtree
   def __len__(self):
-    return len(self.coords)
+    return 2
 
   # For kdtree
   def __getitem__(self, i):
-    return self.coords[i]
+    return self.lat if i == 0 else self.lng
 
 def load_metro_map(metro_file):
   "Loads metro info from disk."
@@ -316,8 +319,7 @@ def load_metro_map(metro_file):
     data = json.load(f)
   for line in data['lines']:
     for station in line['stations']:
-      coords = [float(station['lng']), float(station['lat'])]
-      s = Station(station['name'], line['name'], coords)
+      s = Station(station['name'], line['name'], float(station['lat']), float(station['lng']))
       stations.append(s)
   metro_map = kdtree.create(stations)
   return stations, metro_map
@@ -326,7 +328,7 @@ def assign_metros(schools, station_map):
   "Find nearest metro for each school."
   for s in schools:
     # Spherical coords are not Euclidean but ok for out purposes
-    tree, _ = station_map.search_nn(s.coords)
+    tree, _ = station_map.search_nn((s.lat, s.lng))
     assert tree, "failed to locate station"
     s.station = tree.data
 
@@ -372,7 +374,7 @@ def generate_webpage(schools, html_file, js_file, cfg):
           preset: 'islands#greenDotIconWithCaption',
           iconColor: '#%s'
       }))
-''' % (s.coords[1], s.coords[0],
+''' % (s.lat, s.lng,
        short_name,
        s.rating,
        s.address,
@@ -385,7 +387,7 @@ def generate_webpage(schools, html_file, js_file, cfg):
           preset: 'islands#circleIcon',
           iconColor: '#0080FF'
         }))
-''' % (h.coords[1], h.coords[0],
+''' % (h.lat, h.lng,
        h.address + ' (школа %s)' % short_name))
 
   with open('templates/marks.js.tpl', 'r') as t:
@@ -454,7 +456,7 @@ Examples:
          "schools (out of %d)" % (num_all_schools - num_moscow_schools,
                                   num_all_schools))
   for s in schools:
-    s.address, s.coords = locate_address(s.name + ' ' + s.city, cfg)
+    s.address, s.lat, s.lng = locate_address(s.name + ' ' + s.city, cfg)
 
   if args.house_map is not None:
     wb = xlrd.open_workbook(args.house_map)
@@ -471,9 +473,9 @@ Examples:
           if not Re.match(r'^.+ \/ (.*)', address):
             warn("%s: unknown house address format: %s" % (args.house_map, address))
             continue
-          address, coords = locate_address(Re.group(1) + ' Москва', cfg)
+          address, lat, lng = locate_address(Re.group(1) + ' Москва', cfg)
           if address is not None:
-            s.houses.append(House(address, coords))
+            s.houses.append(House(address, lat, lng))
 
   # TODO: make this a parameter
   stations, station_map = load_metro_map('maps/moscow_metro.json')
