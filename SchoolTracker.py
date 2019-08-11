@@ -124,6 +124,7 @@ class School:
     if self.coords is not None:
       parts.append("xy: %g %g" % (self.coords[0], self.coords[1]))
     if self.station is not None:
+      # TODO: distance
       parts.append("м. %s" % self.station)
     return ', '.join(parts) + ')'
 
@@ -376,6 +377,12 @@ Examples:
                       help="Only consider schools with rating above this threshold.",
                       type=float,
                       default=float('-inf'))
+  parser.add_argument('--print-schools', '-p',
+                      help="Print school info.",
+                      action='store_true', default=False)
+  parser.add_argument('--print-metro-map',
+                      help="Print schools near each metro station.",
+                      action='store_true', default=False)
 #  parser.add_argument('--multi', '-m',
 #                      help="Describe array parameter here (can be specified more than once).",
 #                      action='append')
@@ -411,19 +418,34 @@ Examples:
   for s in schools:
     locate_school(s, cfg)
 
+  # TODO: make this a parameter
   stations, station_map = load_metro_map('maps/moscow_metro.json')
-
 #  print("Stations:")
 #  for s in stations:
 #    print("  %s" % s)
-
   assign_metros(schools, station_map)
 
-  print("Schools:")
-  for s in schools:
-    print("  %s" % s)
+  if args.print_schools:
+    print("Schools:")
+    for s in schools:
+      print("  %s" % s)
 
-  # TODO: sort schools by station
+  if args.print_metro_map:
+    # Build map ...
+    line_idx = {}
+    for s in schools:
+      st = s.station
+      station_idx = line_idx.setdefault(st.line, {})
+      station_idx.setdefault(st.name, []).append(s)
+
+    # ... and print it
+    print("Metro map:")
+    for line, station_idx in sorted(line_idx.items()):
+      print("  %s" % line)
+      for station_name, station_schools in sorted(station_idx.items()):
+        print("    %s" % station_name)
+        for s in station_schools:
+          print("     %s" % s)
 
   generate_webpage(schools, 'Schools.html', 'marks.js', cfg)
 

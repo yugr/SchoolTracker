@@ -8,6 +8,17 @@ Run like
 $ python3 SchoolTracker.py -m 75 --skip-schools 'ВШЭ' ratings/raex/top300.2019.txt settings.ini
 $ python3 SchoolTracker.py -m -100 ratings/official/2018.txt settings.ini
 ```
+to generate HTML with Yandex map.
+
+To print textual info on schools, use
+```
+$ python3 --print-schools ...
+```
+
+To print station mapping, use
+```
+$ python3 --print-metro-map ...
+```
 
 For more details, run
 ```
