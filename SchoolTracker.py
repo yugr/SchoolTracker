@@ -58,6 +58,9 @@ import configparser
 ensure_module('kdtree', user=True)
 import kdtree
 
+ensure_module('xlrd', user=True)
+import xlrd
+
 me = os.path.basename(__file__)
 v = 0
 
@@ -100,6 +103,16 @@ class Re:
   def groups(self, *args, **kwargs):
     return self._last_match.groups(*args, **kwargs)
 
+class House:
+  "Holds info about house."
+
+  def __init__(self, address, coords):
+    self.address = address
+    self.coords = coords
+
+  def __str__(self):
+    return "%s (%f, %f)" % (self.address, (self.coords[0], self.coords[1]))
+
 class School:
   "Holds various info about school."
 
@@ -111,6 +124,7 @@ class School:
     self.address = None
     self.coords = None
     self.station = None
+    self.houses = []
 
   def __str__(self):
     parts = []
@@ -122,7 +136,7 @@ class School:
     else:
       parts.append("@%s" % self.address)
     if self.coords is not None:
-      parts.append("xy: %g %g" % (self.coords[0], self.coords[1]))
+      parts.append("xy: %f %f" % (self.coords[0], self.coords[1]))
     if self.station is not None:
       # TODO: distance
       parts.append("м. %s" % self.station)
@@ -171,9 +185,12 @@ def parse_rating(file):
         num = None
       elif len(nums) > 1:
 #        warn("too many school numbers: %s" % name)
-        num = None
+        num = int(nums[0])
       else:
         num = int(nums[0])
+        # TODO: add rename table
+        if num == 1567:
+          num = 67
       schools.append(School(name, city, num, rating))
       if num is not None:
         idx[num] = schools[-1]
@@ -204,20 +221,19 @@ def _print_response(r):
   s = json.dumps(r, sort_keys=True, indent=4, separators=(',', ': '))
   sys.stderr.write('%s\n' % s)
 
-def locate_school(s, cfg):
+def locate_address(query, cfg):
   "Find school location via Yandex API."
 
-  if not hasattr(locate_school, 'cache'):
+  if not hasattr(locate_address, 'cache'):
     cache_file = '.cache.txt'
     if os.path.exists(cache_file):
       cache = load_locations(cache_file)
     else:
       cache = {}
-    setattr(locate_school, 'cache', cache)
+    setattr(locate_address, 'cache', cache)
     atexit.register(save_locations, cache, cache_file)
-  cache = getattr(locate_school, 'cache')
+  cache = getattr(locate_address, 'cache')
 
-  query = s.name + ' ' + s.city
   if query in cache:
     if v:
       sys.stderr.write("Reading from cache: '%s'\n" % query)
@@ -225,6 +241,13 @@ def locate_school(s, cfg):
   else:
     if v:
       sys.stderr.write("Not in cache: '%s'\n" % query)
+
+    cache_only = cfg['API']['cache_only']
+    cache_only = cache_only.lower() not in ('false', '0', 'n', 'no')
+    if cache_only:
+      warn("address '%s' not in cache, skipping" % query)
+      return None, None
+
 #    params = {
 #      'apikey'  : cfg['API']['jsapi_key'],
 #      'geocode' : query,
@@ -253,17 +276,19 @@ def locate_school(s, cfg):
     if r.status_code != 200:
       msg = r.json()['message']
       warn("Geocode query failed with HTTP code %d: %s" % (r.status_code, msg))
-      return
+      return None, None
     r = r.json()
     if v:
       _print_response(r)
+    if not len(r['features']):
+      warn("Failed to locate '%s'" % query)
+      return None, None
     res0 = r['features'][0]
     address = res0['properties']['description']
     coords = res0['geometry']['coordinates']
     cache[query] = address, coords
 
-  s.address = address
-  s.coords = coords
+  return address, coords
 
 class Station:
   "Holds info about metro station."
@@ -338,8 +363,9 @@ def generate_webpage(schools, html_file, js_file, cfg):
     rmin = min(rmin, s.rating)
     rmax = max(rmax, s.rating)
   for s in schools:
+    short_name = s.number if s.number is not None else s.name
     parts.append('''\
-      .add(new ymaps.Placemark([%g, %g], {
+      .add(new ymaps.Placemark([%f, %f], {
           iconCaption: '%s',
           balloonContent: 'Рейтинг %s, %s'
       }, {
@@ -347,10 +373,20 @@ def generate_webpage(schools, html_file, js_file, cfg):
           iconColor: '#%s'
       }))
 ''' % (s.coords[1], s.coords[0],
-       s.number if s.number is not None else s.name,
+       short_name,
        s.rating,
        s.address,
        rating_to_color(s.rating, rmin, rmax)))
+    for h in s.houses:
+      parts.append('''\
+     .add(new ymaps.Placemark([%f, %f], {
+          balloonContent: '%s',
+        }, {
+          preset: 'islands#circleIcon',
+          iconColor: '#0080FF'
+        }))
+''' % (h.coords[1], h.coords[0],
+       h.address + ' (школа %s)' % short_name))
 
   with open('templates/marks.js.tpl', 'r') as t:
     js_code = string.Template(t.read()).substitute(MARKS=''.join(parts))
@@ -383,6 +419,8 @@ Examples:
   parser.add_argument('--print-metro-map',
                       help="Print schools near each metro station.",
                       action='store_true', default=False)
+  parser.add_argument('--house-map',
+                      help="House-school mapping.")
 #  parser.add_argument('--multi', '-m',
 #                      help="Describe array parameter here (can be specified more than once).",
 #                      action='append')
@@ -403,7 +441,7 @@ Examples:
   if not cfg.read(args.settings_file):
     error("failed to parse config file %s" % args.settings_file)
 
-  schools, idx = parse_rating(args.rating_file)
+  schools, school_idx = parse_rating(args.rating_file)
   num_all_schools = len(schools)
   schools = list(filter(lambda s: 'Москва' in s.city, schools))
   schools = list(filter(lambda s: s.rating >= args.min_rating, schools))
@@ -412,11 +450,30 @@ Examples:
     schools = list(filter(lambda s: not skip_schools.search(s.name), schools))
   num_moscow_schools = len(schools)
   if num_all_schools != num_moscow_schools:
-    warn("filtered %d non-Moscow"
+    warn("filtered %d non-Moscow "
          "schools (out of %d)" % (num_all_schools - num_moscow_schools,
                                   num_all_schools))
   for s in schools:
-    locate_school(s, cfg)
+    s.address, s.coords = locate_address(s.name + ' ' + s.city, cfg)
+
+  if args.house_map is not None:
+    wb = xlrd.open_workbook(args.house_map)
+    for sht in wb.sheets():
+      if Re.match(r'^([0-9]+)-', sht.name):
+        num = int(Re.group(1))
+        s = school_idx.get(num, None)
+        if s is None:
+          warn("%s: unknown school no. %d" % (args.house_map, num))
+          continue
+        for r in range(sht.nrows):
+          address = str(sht.cell(r, 0)).strip('\'')
+          # E.g. "Юго-Западный / Ленинский пр-кт, д.62/1"
+          if not Re.match(r'^.+ \/ (.*)', address):
+            warn("%s: unknown house address format: %s" % (args.house_map, address))
+            continue
+          address, coords = locate_address(Re.group(1) + ' Москва', cfg)
+          if address is not None:
+            s.houses.append(House(address, coords))
 
   # TODO: make this a parameter
   stations, station_map = load_metro_map('maps/moscow_metro.json')
