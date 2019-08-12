@@ -17,6 +17,7 @@ import json
 import atexit
 import pprint
 import string
+import math
 
 import imp, site
 
@@ -103,6 +104,12 @@ class Re:
   def groups(self, *args, **kwargs):
     return self._last_match.groups(*args, **kwargs)
 
+class Moscow:
+  LAT = 55.756994
+  LNG = 37.618920
+  LAT_SPAN = 0.400552
+  LNG_SPAN = 0.552069
+
 class House:
   "Holds info about house."
 
@@ -142,6 +149,18 @@ class School:
       # TODO: distance
       parts.append("м. %s" % self.station)
     return ', '.join(parts) + ')'
+
+  @property
+  def short_name(self):
+    return self.number if self.number is not None else self.name
+
+def km2lat(km):
+  # Based on https://gis.stackexchange.com/questions/142326/calculating-longitude-length-in-miles
+  return km / 111
+
+def km2lng(km, lat):
+  # Based on https://gis.stackexchange.com/questions/142326/calculating-longitude-length-in-miles
+  return km2lat(km) / math.cos(math.pi / 2 * lat / 90)
 
 def parse_rating(file):
   idx = {}
@@ -222,8 +241,8 @@ def _print_response(r):
   s = json.dumps(r, sort_keys=True, indent=4, separators=(',', ': '))
   sys.stderr.write('%s\n' % s)
 
-def locate_address(query, cfg):
-  "Find school location via Yandex API."
+def locate_address(query, cfg, is_org, lat, lng, lat_span, lng_span):
+  "Find location via Yandex API."
 
   if not hasattr(locate_address, 'cache'):
     cache_file = '.cache.txt'
@@ -259,10 +278,10 @@ def locate_address(query, cfg):
     params = {
       'apikey' : cfg['API']['search_api_key'],
       'text' : query,
-      'type' : 'biz',
+      'type' : 'biz' if is_org else 'geo',
       'lang' : 'ru_RU',
-      'll'   : '37.618920,55.756994',
-      'spn'  : '0.552069,0.400552',
+      'll'   : ('%f,%f' % (lng, lat)),
+      'spn'  : ('%f,%f' % (lng_span, lat_span))
     }
 
     verify = cfg['API']['verify']
@@ -285,12 +304,16 @@ def locate_address(query, cfg):
       warn("Failed to locate '%s'" % query)
       return None, None, None
     res0 = r['features'][0]
-    address = res0['properties']['description']
+    if is_org:
+      address = res0['properties']['description']
+    else:
+      # For 'geo' mode address is split across 'name' and 'description' fields
+      props = res0['properties']
+      address = props['name'] + ', ' + props['description']
     coords = res0['geometry']['coordinates']
     cache[query] = address, coords
 
-  # Geocoder has longitude first
-  return address, coords[1], coords[0]
+  return address, coords[1], coords[0]  # Geocoder has longitude first
 
 class Station:
   "Holds info about metro station."
@@ -364,21 +387,9 @@ def generate_webpage(schools, html_file, js_file, cfg):
   for s in schools:
     rmin = min(rmin, s.rating)
     rmax = max(rmax, s.rating)
+
+  # First plot the houses
   for s in schools:
-    short_name = s.number if s.number is not None else s.name
-    parts.append('''\
-      .add(new ymaps.Placemark([%f, %f], {
-          iconCaption: '%s',
-          balloonContent: 'Рейтинг %s, %s'
-      }, {
-          preset: 'islands#greenDotIconWithCaption',
-          iconColor: '#%s'
-      }))
-''' % (s.lat, s.lng,
-       short_name,
-       s.rating,
-       s.address,
-       rating_to_color(s.rating, rmin, rmax)))
     for h in s.houses:
       parts.append('''\
      .add(new ymaps.Placemark([%f, %f], {
@@ -388,7 +399,23 @@ def generate_webpage(schools, html_file, js_file, cfg):
           iconColor: '#0080FF'
         }))
 ''' % (h.lat, h.lng,
-       h.address + ' (школа %s)' % short_name))
+       h.address + ' (школа %s)' % s.short_name))
+
+  # Then schools on top
+  for s in schools:
+    parts.append('''\
+      .add(new ymaps.Placemark([%f, %f], {
+          iconCaption: '%s',
+          balloonContent: 'Рейтинг %s, %s'
+      }, {
+          preset: 'islands#greenDotIconWithCaption',
+          iconColor: '#%s'
+      }))
+''' % (s.lat, s.lng,
+       s.short_name,
+       s.rating,
+       s.address,
+       rating_to_color(s.rating, rmin, rmax)))
 
   with open('templates/marks.js.tpl', 'r') as t:
     js_code = string.Template(t.read()).substitute(MARKS=''.join(parts))
@@ -456,7 +483,9 @@ Examples:
          "schools (out of %d)" % (num_all_schools - num_moscow_schools,
                                   num_all_schools))
   for s in schools:
-    s.address, s.lat, s.lng = locate_address(s.name + ' ' + s.city, cfg)
+    s.address, s.lat, s.lng = locate_address(s.name + ' ' + s.city, cfg, True,
+                                             Moscow.LAT, Moscow.LNG,
+                                             Moscow.LAT_SPAN, Moscow.LNG_SPAN)
 
   if args.house_map is not None:
     wb = xlrd.open_workbook(args.house_map)
@@ -473,7 +502,11 @@ Examples:
           if not Re.match(r'^.+ \/ (.*)', address):
             warn("%s: unknown house address format: %s" % (args.house_map, address))
             continue
-          address, lat, lng = locate_address(Re.group(1) + ' Москва', cfg)
+          lat_span = km2lat(4)
+          lng_span = km2lng(4, s.lat)
+          address, lat, lng = locate_address(Re.group(1) + ' Москва', cfg, False,
+                                             s.lat, s.lng,
+                                             lat_span, lng_span)
           if address is not None:
             s.houses.append(House(address, lat, lng))
 

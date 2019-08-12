@@ -10,6 +10,11 @@ $ python3 SchoolTracker.py -m -100 ratings/official/2018.txt settings.ini
 ```
 to generate HTML with Yandex map.
 
+To add houses on map, pass house-school mapping:
+```
+$ python3 SchoolTracker.py --house-map SchoolAttributions.xlsx ...
+```
+
 To print textual info on schools, use
 ```
 $ python3 --print-schools ...
