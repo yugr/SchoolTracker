@@ -104,11 +104,17 @@ class Re:
   def groups(self, *args, **kwargs):
     return self._last_match.groups(*args, **kwargs)
 
-class Moscow:
-  LAT = 55.756994
-  LNG = 37.618920
-  LAT_SPAN = 0.400552
-  LNG_SPAN = 0.552069
+class City:
+  def __init__(self, name, lat, lng, lat_span, lng_span):
+    self.name = name
+    self.lat = lat
+    self.lng = lng
+    self.lat_span = lat_span
+    self.lng_span = lng_span
+
+city_map = {
+  'Москва' : City('Москва', 55.756994, 37.618920, 0.400552, 0.552069)
+}
 
 class House:
   "Holds info about house."
@@ -136,7 +142,7 @@ class School:
 
   def __str__(self):
     parts = []
-    parts.append("\"%s\" (rating %s" % (self.name, self.rating))
+    parts.append("'%s' (rating %s" % (self.name, self.rating))
     if self.number is not None:
       parts.append("#%d" % self.number)
     if self.address is None:
@@ -424,7 +430,7 @@ def generate_webpage(schools, html_file, js_file, cfg):
     f.write(js_code)
 
 def main():
-  parser = argparse.ArgumentParser(description="A helper tool to visualize info about public schools in Moscow.",
+  parser = argparse.ArgumentParser(description="A helper tool to visualize info about public schools.",
                                    formatter_class=argparse.RawDescriptionHelpFormatter,
                                    epilog="""\
 Examples:
@@ -436,10 +442,13 @@ Examples:
 #  parser.add_argument('--no-flag',
 #                      help="Inverse of --flag.",
 #                      dest='flag', action='store_false')
+  parser.add_argument('--city', '-c',
+                      help="Skip schools not in CITY (default is 'Москва').",
+                      default='Москва')
   parser.add_argument('--skip-schools',
                       help="Ignore schools that match regex.")
   parser.add_argument('--min-rating', '-m',
-                      help="Only consider schools with rating above this threshold.",
+                      help="Only consider schools with rating above MIN_RATING.",
                       type=float,
                       default=float('-inf'))
   parser.add_argument('--print-schools', '-p',
@@ -470,22 +479,26 @@ Examples:
   if not cfg.read(args.settings_file):
     error("failed to parse config file %s" % args.settings_file)
 
+  city = city_map.get(args.city, None)
+  if city is None:
+    error("unknown city '%s'" % args.city)
+
   schools, school_idx = parse_rating(args.rating_file)
   num_all_schools = len(schools)
-  schools = list(filter(lambda s: 'Москва' in s.city, schools))
+  schools = list(filter(lambda s: city.name in s.city, schools))
   schools = list(filter(lambda s: s.rating >= args.min_rating, schools))
   if args.skip_schools:
     skip_schools = re.compile(args.skip_schools)
     schools = list(filter(lambda s: not skip_schools.search(s.name), schools))
-  num_moscow_schools = len(schools)
-  if num_all_schools != num_moscow_schools:
-    warn("filtered %d non-Moscow "
-         "schools (out of %d)" % (num_all_schools - num_moscow_schools,
-                                  num_all_schools))
+  num_city_schools = len(schools)
+  if num_all_schools != num_city_schools:
+    warn("filtered %d schools not in \'%s\' (out of %d)"
+         % (num_all_schools - num_city_schools,
+            city.name, num_all_schools))
   for s in schools:
     s.address, s.lat, s.lng = locate_address(s.name + ' ' + s.city, cfg, True,
-                                             Moscow.LAT, Moscow.LNG,
-                                             Moscow.LAT_SPAN, Moscow.LNG_SPAN)
+                                             city.lat, city.lng,
+                                             city.lat_span, city.lng_span)
 
   if args.house_map is not None:
     wb = xlrd.open_workbook(args.house_map)
@@ -504,9 +517,8 @@ Examples:
             continue
           lat_span = km2lat(4)
           lng_span = km2lng(4, s.lat)
-          address, lat, lng = locate_address(Re.group(1) + ' Москва', cfg, False,
-                                             s.lat, s.lng,
-                                             lat_span, lng_span)
+          address, lat, lng = locate_address(Re.group(1) + ' ' + city.name, cfg, False,
+                                             s.lat, s.lng, lat_span, lng_span)
           if address is not None:
             s.houses.append(House(address, lat, lng))
 
