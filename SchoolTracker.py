@@ -181,7 +181,7 @@ def parse_rating(file):
       place += 1
       # Parse line
       rating = name = city = None
-      if Re.match(r'^([0-9]+)\. +(.*) +\(([+-][0-9]+)\) *$', line):
+      if Re.match(r'^([0-9]+)\. +(.*) +\((?:[+-][0-9]+|0)\) *$', line):
         # Official rating (from schoolotzyv.ru)
         #   1. Школа №1535 (+1)
         rating = -int(Re.group(1))
@@ -486,15 +486,25 @@ Examples:
   schools, school_idx = parse_rating(args.rating_file)
   num_all_schools = len(schools)
   schools = list(filter(lambda s: city.name in s.city, schools))
-  schools = list(filter(lambda s: s.rating >= args.min_rating, schools))
-  if args.skip_schools:
-    skip_schools = re.compile(args.skip_schools)
-    schools = list(filter(lambda s: not skip_schools.search(s.name), schools))
   num_city_schools = len(schools)
   if num_all_schools != num_city_schools:
     warn("filtered %d schools not in \'%s\' (out of %d)"
          % (num_all_schools - num_city_schools,
             city.name, num_all_schools))
+  schools = list(filter(lambda s: s.rating >= args.min_rating, schools))
+  num_rated_schools = len(schools)
+  if num_rated_schools != num_city_schools:
+    warn("filtered %d schools with rating below %s (out of %d)"
+         % (num_city_schools - num_rated_schools,
+            args.min_rating, num_all_schools))
+  if args.skip_schools:
+    skip_schools = re.compile(args.skip_schools)
+    schools = list(filter(lambda s: not skip_schools.search(s.name), schools))
+    num_whitelist_schools = len(schools)
+    if num_whitelist_schools != num_rated_schools:
+      warn("filtered %d blacklisted schools (out of %d)"
+           % (num_rated_schools - num_whitelist_schools,
+              num_all_schools))
   for s in schools:
     s.address, s.lat, s.lng = locate_address(s.name + ' ' + s.city, cfg, True,
                                              city.lat, city.lng,
