@@ -29,3 +29,7 @@ For more details, run
 ```
 $ python3 SchoolTracker.py -h
 ```
+
+TODO:
+* display all school locations
+* support https://www.mos.ru/donm/documents/antimonopolnyi-komplaens/view/173858220/
