@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-# Copyright 2019 Yury Gribov
+# Copyright 2019-2021 Yury Gribov
 # 
 # Use of this source code is governed by MIT license that can be
 # found in the LICENSE.txt file.
@@ -38,7 +38,7 @@ def ensure_module(module, package=None, user=True, quiet=False):
     try:
       subprocess.check_call([exe, '-mensurepip'])
     except subprocess.CalledProcessError:
-      warn("failed to ensure pip")
+      sys.stderr.write("failed to ensure pip\n")
     subprocess.check_call(
       [exe, '-mpip', 'install'] + (['--user'] if user else []) + [package])
     # User site packages are often not in PATH by default
@@ -48,7 +48,7 @@ def ensure_module(module, package=None, user=True, quiet=False):
     try:
       imp.find_module(module)
     except ImportError:
-      error("module '%s' not found in package '%s'" % (module, package))
+      sys.stderr.write("module '%s' not found in package '%s'\n" % (module, package))
 
 ensure_module('requests', user=True)
 import requests
@@ -268,7 +268,7 @@ def locate_address(query, cfg, is_org, lat, lng, lat_span, lng_span):
     if v:
       sys.stderr.write("Not in cache: '%s'\n" % query)
 
-    cache_only = cfg['API']['cache_only']
+    cache_only = cfg['API'].get('cache_only', 'false')
     cache_only = cache_only.lower() not in ('false', '0', 'n', 'no')
     if cache_only:
       warn("address '%s' not in cache, skipping" % query)
@@ -509,6 +509,7 @@ Examples:
     s.address, s.lat, s.lng = locate_address(s.name + ' ' + s.city, cfg, True,
                                              city.lat, city.lng,
                                              city.lat_span, city.lng_span)
+  schools = [s for s in schools if s.address is not None]
 
   if args.house_map is not None:
     wb = xlrd.open_workbook(args.house_map)
