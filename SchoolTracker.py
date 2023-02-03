@@ -111,17 +111,6 @@ city_map = {
   'Москва' : City('Москва', 55.756994, 37.618920, 0.400552, 0.552069)
 }
 
-class House:
-  "Holds info about house."
-
-  def __init__(self, address, lat, lng):
-    self.address = address
-    self.lat = lat
-    self.lng = lng
-
-  def __str__(self):
-    return "%s (%f, %f)" % (self.address, self.lat, self.lng)
-
 class School:
   "Holds various info about school."
 
@@ -133,7 +122,6 @@ class School:
     self.address = None
     self.lat = self.lng = None
     self.station = None
-    self.houses = []
 
   def __str__(self):
     parts = []
@@ -375,20 +363,7 @@ def generate_webpage(schools, html_file, js_file, args):
     rmin = min(rmin, s.rating)
     rmax = max(rmax, s.rating)
 
-  # First plot the houses
-  for s in schools:
-    for h in s.houses:
-      parts.append('''\
-     .add(new ymaps.Placemark([%f, %f], {
-          balloonContent: '%s',
-        }, {
-          preset: 'islands#circleIcon',
-          iconColor: '#0080FF'
-        }))
-''' % (h.lat, h.lng,
-       h.address + ' (школа %s)' % s.short_name))
-
-  # Then schools on top
+  # Plot schools
   for s in schools:
     parts.append('''\
       .add(new ymaps.Placemark([%f, %f], {
@@ -446,8 +421,6 @@ Examples:
   parser.add_argument('--print-metro-map',
                       help="Print schools near each metro station.",
                       action='store_true', default=False)
-  parser.add_argument('--house-map',
-                      help="House-school mapping.")
   parser.add_argument('--jsapi-key',
                       help="Token for JavaScript/Geocoder API "
                            "(https://yandex.ru/dev/maps/jsapi)")
@@ -502,28 +475,6 @@ Examples:
                                              city.lat, city.lng,
                                              city.lat_span, city.lng_span)
   schools = [s for s in schools if s.address is not None]
-
-  if args.house_map is not None:
-    wb = xlrd.open_workbook(args.house_map)
-    for sht in wb.sheets():
-      if Re.match(r'^([0-9]+)-', sht.name):
-        num = int(Re.group(1))
-        s = school_idx.get(num, None)
-        if s is None:
-          warn("%s: unknown school no. %d" % (args.house_map, num))
-          continue
-        for r in range(sht.nrows):
-          address = str(sht.cell(r, 0)).strip('\'')
-          # E.g. "Юго-Западный / Ленинский пр-кт, д.62/1"
-          if not Re.match(r'^.+ \/ (.*)', address):
-            warn("%s: unknown house address format: %s" % (args.house_map, address))
-            continue
-          lat_span = km2lat(4)
-          lng_span = km2lng(4, s.lat)
-          address, lat, lng = locate_address(Re.group(1) + ' ' + city.name, args, False,
-                                             s.lat, s.lng, lat_span, lng_span)
-          if address is not None:
-            s.houses.append(House(address, lat, lng))
 
   stations, station_map = load_metro_map('maps/moscow_metro.json')
   if v:

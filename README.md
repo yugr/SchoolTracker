@@ -33,12 +33,6 @@ You can also draw more schools and use another rating:
 $ python3 SchoolTracker.py -m -100 ratings/official/2018.txt
 ```
 
-To add house-school affinity, add house-school mapping:
-```
-$ python3 SchoolTracker.py --house-map SchoolAttributions.xlsx ...
-```
-(presently affinity file has to be written by hand).
-
 To also print textual info on schools, use
 ```
 $ python3 --print-schools ...
