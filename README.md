@@ -51,7 +51,6 @@ $ python3 SchoolTracker.py -h
 
 # TODO
 
-* use standard school affinity file from Moscow education department
+* use standard school affinity file from Moscow education department (https://obrmos.ru/dop/docs/prikr/docs_prikr_dom_okruga.html)
 * draw all school locations for schools with multiple buildings
-* draw metro stations
-* support https://www.mos.ru/donm/documents/antimonopolnyi-komplaens/view/173858220/
+* write scripts to automatically download ratings (RAEX, schoolotzyv.ru)
