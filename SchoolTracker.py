@@ -392,7 +392,7 @@ def main():
 
 Examples:
   # XXX and YYY need to be replaced with your API tokens
-  $ python {0} --jsapi-key XXX --places-key YYY ratings/raex/top300.2019.txt
+  $ python3 {0} --jsapi-key XXX --places-key YYY ratings/raex/top300.2019.txt
 """.format(me))
   parser.add_argument('--cache-only',
                       help="Do not use Yandex API (only consult previously cache data).",
