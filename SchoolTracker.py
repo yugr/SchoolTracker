@@ -182,13 +182,13 @@ def parse_rating(file):
         rating = -int(Re.group(1))
         name = Re.group(2)
         city = 'Москва'
-      elif Re.match(r'^(.*)\t([0-9]+)$', line):
+      elif Re.match(r'^(.*)\t([0-9.]+)$', line):
         # Non-official rating from schoolotzyv.ru
         #   Школа №179 Москва	94
-        rating = int(Re.group(2))
+        rating = int(float(Re.group(2)))
         name = Re.group(1)
         city = 'Москва'
-      elif Re.match(r'^[0-9]+[ \t]+([^\t]+)\t+([^\t]+\t+[^\t]+)\t+([0-9,]+)', line):
+      elif Re.match(r'^[0-9]+[ \t]+([^\t]+)\t+([^\t]+\t+[^\t]+)\t+([0-9,.]+)', line):
         # RAEX rating
         #   1 	Лицей НИУ ВШЭ 	Москва 	Москва 	1000,00
         name = Re.group(1)
