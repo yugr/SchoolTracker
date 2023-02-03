@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-# Copyright 2019-2021 Yury Gribov
+# Copyright 2019-2023 Yury Gribov
 # 
 # Use of this source code is governed by MIT license that can be
 # found in the LICENSE.txt file.
@@ -33,12 +33,11 @@ def ensure_module(module, package=None, user=True, quiet=False):
     if not quiet:
       print("Installing Python module %s..." % module)
     exe = sys.executable
-    if package is None:
-      package = module
+    package = package or module
     try:
-      subprocess.check_call([exe, '-mensurepip'])
-    except subprocess.CalledProcessError:
-      sys.stderr.write("failed to ensure pip\n")
+      import pip
+    except ImportError:
+        error("install python3-pip")
     subprocess.check_call(
       [exe, '-mpip', 'install'] + (['--user'] if user else []) + [package])
     # User site packages are often not in PATH by default
@@ -247,7 +246,7 @@ def _print_response(r):
   s = json.dumps(r, sort_keys=True, indent=4, separators=(',', ': '))
   sys.stderr.write('%s\n' % s)
 
-def locate_address(query, cfg, is_org, lat, lng, lat_span, lng_span):
+def locate_address(query, args, is_org, lat, lng, lat_span, lng_span):
   "Find location via Yandex API."
 
   if not hasattr(locate_address, 'cache'):
@@ -268,21 +267,12 @@ def locate_address(query, cfg, is_org, lat, lng, lat_span, lng_span):
     if v:
       sys.stderr.write("Not in cache: '%s'\n" % query)
 
-    cache_only = cfg['API'].get('cache_only', 'false')
-    cache_only = cache_only.lower() not in ('false', '0', 'n', 'no')
-    if cache_only:
+    if args.cache_only:
       warn("address '%s' not in cache, skipping" % query)
       return None, None, None
 
-#    params = {
-#      'apikey'  : cfg['API']['jsapi_key'],
-#      'geocode' : query,
-#      'format' : 'json',
-#      'lang' : 'en_RU',
-#    }
-
     params = {
-      'apikey' : cfg['API']['search_api_key'],
+      'apikey' : args.places_key,
       'text' : query,
       'type' : 'biz' if is_org else 'geo',
       'lang' : 'ru_RU',
@@ -290,13 +280,8 @@ def locate_address(query, cfg, is_org, lat, lng, lat_span, lng_span):
       'spn'  : ('%f,%f' % (lng_span, lat_span))
     }
 
-    verify = cfg['API']['verify']
-    verify = verify.lower() not in ('false', '0', 'n', 'no')
-
-#    r = requests.post('https://geocode-maps.yandex.ru/1.x',
-#                      params=params, verify=verify)
     r = requests.get('https://search-maps.yandex.ru/v1',
-                     params=params, verify=verify)
+                     params=params, verify=args.verify)
     if v:
       sys.stderr.write("Geocode send query: %s\n" % r.url)
     if r.status_code != 200:
@@ -374,13 +359,13 @@ def rating_to_color(r, rmin, rmax):
     C.append(c)
   return '%02x%02x%02x' % (*C,)
 
-def generate_webpage(schools, html_file, js_file, cfg):
+def generate_webpage(schools, html_file, js_file, args):
   "Generate Yandex map with marks."
 
   # HTML
 
   with open('templates/Schools.tpl', 'r') as t:
-    html_code = string.Template(t.read()).substitute(API_KEY=cfg['API']['jsapi_key'])
+    html_code = string.Template(t.read()).substitute(API_KEY=args.jsapi_key)
 
   with open(html_file, 'w') as f:
     f.write(html_code)
@@ -433,15 +418,23 @@ def main():
   parser = argparse.ArgumentParser(description="A helper tool to visualize info about public schools.",
                                    formatter_class=argparse.RawDescriptionHelpFormatter,
                                    epilog="""\
+
 Examples:
-  $ python {0} ratings/raex/top300.2019.txt settings.ini
+  # XXX and YYY need to be replaced with your API tokens
+  $ python {0} --jsapi-key XXX --places-key YYY ratings/raex/top300.2019.txt
 """.format(me))
-#  parser.add_argument('--flag', '-f',
-#                      help="Describe flag here.",
-#                      dest='flag', action='store_true', default=False)
-#  parser.add_argument('--no-flag',
-#                      help="Inverse of --flag.",
-#                      dest='flag', action='store_false')
+  parser.add_argument('--cache-only',
+                      help="Do not use Yandex API (only consult previously cache data).",
+                      dest='cache_only', action='store_true', default=False)
+  parser.add_argument('--no-cache_only',
+                      help="Inverse of --cache-only.",
+                      dest='cache_only', action='store_false')
+  parser.add_argument('--verify',
+                      help="Verify SSL certificates",
+                      dest='verify', action='store_true', default=True)
+  parser.add_argument('--no-verify',
+                      help="Do not verify SSL certificates.",
+                      dest='verify', action='store_false')
   parser.add_argument('--city', '-c',
                       help="Skip schools not in CITY (default is 'Москва').",
                       default='Москва')
@@ -459,25 +452,28 @@ Examples:
                       action='store_true', default=False)
   parser.add_argument('--house-map',
                       help="House-school mapping.")
-#  parser.add_argument('--multi', '-m',
-#                      help="Describe array parameter here (can be specified more than once).",
-#                      action='append')
+  parser.add_argument('--jsapi-key',
+                      help="Token for JavaScript/Geocoder API "
+                           "(https://yandex.ru/dev/maps/jsapi)")
+  parser.add_argument('--places-key',
+                      help="Token for Places API "
+                           "(https://yandex.ru/dev/maps/geosearch)")
   parser.add_argument('--verbose', '-v',
                       help="Print diagnostic info (can be specified more than once).",
                       action='count', default=0)
   parser.add_argument('rating_file',
                       help="Text file with rating.", metavar='RATING')
-  parser.add_argument('settings_file',
-                      help="Settings .ini file.", metavar='SETTINGS.INI')
 
   args = parser.parse_args()
 
   global v
   v = args.verbose
 
-  cfg = configparser.ConfigParser(inline_comment_prefixes=';')
-  if not cfg.read(args.settings_file):
-    error("failed to parse config file %s" % args.settings_file)
+  if not args.jsapi_key:
+    error("specify --jsapi-key via command-line")
+
+  if not args.places_key:
+    error("specify --places-key via command-line")
 
   city = city_map.get(args.city, None)
   if city is None:
@@ -506,7 +502,7 @@ Examples:
            % (num_rated_schools - num_whitelist_schools,
               num_all_schools))
   for s in schools:
-    s.address, s.lat, s.lng = locate_address(s.name + ' ' + s.city, cfg, True,
+    s.address, s.lat, s.lng = locate_address(s.name + ' ' + s.city, args, True,
                                              city.lat, city.lng,
                                              city.lat_span, city.lng_span)
   schools = [s for s in schools if s.address is not None]
@@ -528,16 +524,17 @@ Examples:
             continue
           lat_span = km2lat(4)
           lng_span = km2lng(4, s.lat)
-          address, lat, lng = locate_address(Re.group(1) + ' ' + city.name, cfg, False,
+          address, lat, lng = locate_address(Re.group(1) + ' ' + city.name, args, False,
                                              s.lat, s.lng, lat_span, lng_span)
           if address is not None:
             s.houses.append(House(address, lat, lng))
 
-  # TODO: make this a parameter
   stations, station_map = load_metro_map('maps/moscow_metro.json')
-#  print("Stations:")
-#  for s in stations:
-#    print("  %s" % s)
+  if v:
+    print("Stations:")
+    for s in stations:
+      print("  %s" % s)
+
   assign_metros(schools, station_map)
 
   if args.print_schools:
@@ -562,7 +559,7 @@ Examples:
         for s in station_schools:
           print("     %s" % s)
 
-  generate_webpage(schools, 'Schools.html', 'marks.js', cfg)
+  generate_webpage(schools, 'Schools.html', 'marks.js', args)
 
   return 0
 

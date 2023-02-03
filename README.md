@@ -1,6 +1,6 @@
 # What is this
 
-Simple repo to show location of highly-rated Moscow schools.
+Simple tool to show location of highly-rated Moscow schools.
 School ratings have been taken from
 * official school rating
 * [RAEX rating](https://raex-a.ru/releases/2020/21April)
@@ -11,9 +11,10 @@ School ratings have been taken from
 To run, obtain developer keys for
 * JavaScript API и HTTP Геокодер
 * API Поиска по организациям
-(it's free) and add them to settings\_example.ini.
+They are free and can be obtained in
+[Кабинет Разработчика](https://developer.tech.yandex.ru/keys).
 
-On Linux you may also need to install pip:
+On Linux you need to install pip:
 ```
 $ sudo apt-get install python3-pip
 ```
@@ -22,13 +23,14 @@ $ sudo apt-get install python3-pip
 
 To draw a map with 75 best schools based on RAEX rating, excluding the HSE, run
 ```
-$ python3 SchoolTracker.py -m 75 --skip-schools 'ВШЭ' ratings/raex/top300.2019.txt settings.ini
+$ python3 SchoolTracker.py -m 75 --skip-schools 'ВШЭ' --jsapi-key XXX --places-key YYY ratings/raex/top300.2022.txt
 ```
+(XXX and YYY need to be replaced with your Yandex tokens).
 This will generate Schools.html (and marks.js) file which can be viewed in your favourite browser.
 
 You can also draw more schools and use another rating:
 ```
-$ python3 SchoolTracker.py -m -100 ratings/official/2018.txt settings.ini
+$ python3 SchoolTracker.py -m -100 ratings/official/2018.txt
 ```
 
 To add house-school affinity, add house-school mapping:
