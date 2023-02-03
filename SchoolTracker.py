@@ -19,16 +19,15 @@ import pprint
 import string
 import math
 
-import imp, site
-
 def ensure_module(module, package=None, user=True, quiet=False):
   """
   Installs module if it's missing. Call like
     ensure_module('configparser')
     ensure_module('wx', 'wxPython')
   """
+  import site
   try:
-    imp.find_module(module)
+    exec('import ' + module)
   except ImportError:
     if not quiet:
       print("Installing Python module %s..." % module)
@@ -45,15 +44,12 @@ def ensure_module(module, package=None, user=True, quiet=False):
       if d not in sys.path:
         sys.path.append(d)
     try:
-      imp.find_module(module)
+      exec('import ' + module)
     except ImportError:
-      sys.stderr.write("module '%s' not found in package '%s'\n" % (module, package))
+      error("module '%s' not found in package '%s'\n" % (module, package))
 
 ensure_module('requests', user=True)
 import requests
-
-ensure_module('configparser', user=True)
-import configparser
 
 ensure_module('kdtree', user=True)
 import kdtree
