@@ -11,6 +11,7 @@ School ratings have been taken from
 To run, obtain developer keys for
 * JavaScript API и HTTP Геокодер
 * API Поиска по организациям
+
 They are free and can be obtained in
 [Кабинет Разработчика](https://developer.tech.yandex.ru/keys).
 
@@ -28,9 +29,9 @@ $ python3 SchoolTracker.py -m 75 --jsapi-key XXX --places-key YYY ratings/raex/t
 ```
 This will generate Schools.html (and marks.js) file which can be viewed in your favourite browser.
 
-You can also draw more schools and use another rating:
+You can also draw more schools or use another rating:
 ```
-$ python3 SchoolTracker.py -m -100 ratings/official/2018.txt
+$ python3 SchoolTracker.py -m -100 ratings/schoolotzyv/2021/ege.cumulative.2021.txt
 ```
 
 To also print textual info on schools, use
@@ -39,7 +40,7 @@ $ python3 --print-schools ...
 ```
 (this is mainly used for debugging).
 
-To print station mapping, use
+To print metro station mapping, use
 ```
 $ python3 --print-metro-map ...
 ```
