@@ -25,7 +25,8 @@ $ sudo apt-get install python3-pip
 To draw a map with 75 best schools based on RAEX rating, excluding the HSE, run
 ```
 # XXX and YYY need to be replaced with your Yandex tokens
-$ python3 SchoolTracker.py -m 75 --jsapi-key XXX --places-key YYY ratings/raex/top300.2022.txt
+$ python3 SchoolTracker.py -m 75 --skip-schools 'ВШЭ' \
+  --jsapi-key XXX --places-key YYY ratings/raex/top300.2022.txt
 ```
 This will generate Schools.html (and marks.js) file which can be viewed in your favourite browser.
 
