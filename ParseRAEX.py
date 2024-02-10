@@ -75,15 +75,18 @@ Examples:
                       help="Print diagnostic info (can be specified more than once).",
                       action='count', default=0)
   parser.add_argument('weblink',
-                      help="Path to rating page.", metavar='WEBLINK')
+                      help="Path to rating page or HTML file.", metavar='WEBLINK')
 
   args = parser.parse_args()
 
   global v
   v = args.verbose
 
-#  html = open('index.html').read()
-  html = requests.get(args.weblink).text
+  if os.path.exists(args.weblink):
+    with open(args.weblink) as f:
+      html = f.read()
+  else:
+    html = requests.get(args.weblink).text
 
   s = BeautifulSoup(html, 'html.parser')
 
@@ -91,7 +94,7 @@ Examples:
 
   toc = {}
   for i, th in enumerate(s.table.thead.tr.find_all('th')):
-    name = th.span.text
+    name = th.span.text.strip()
     if name in ('Название', 'Школа'):
       toc['Name'] = i
     elif name in ('Субъект федерации', 'Регион'):
