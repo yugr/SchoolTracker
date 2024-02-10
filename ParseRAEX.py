@@ -13,11 +13,6 @@ import os.path
 import re
 import subprocess
 import argparse
-import json
-import atexit
-import pprint
-import string
-import math
 
 def warn(msg):
   sys.stderr.write('%s: warning: %s\n' % (me, msg))

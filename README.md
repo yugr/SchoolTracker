@@ -53,7 +53,10 @@ $ python3 SchoolTracker.py -h
 
 # Generation of rating files
 
-TODO
+Rating files for RAEX rating can be generated via
+```
+$ python3 ParseRAEX.py https://raex-rr.com/education/schools_rating/top-300_schools/2023
+```
 
 # TODO
 
