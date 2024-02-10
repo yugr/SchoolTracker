@@ -51,8 +51,12 @@ For more details, run
 $ python3 SchoolTracker.py -h
 ```
 
+# Generation of rating files
+
+TODO
+
 # TODO
 
 * use standard school affinity file from Moscow education department (https://obrmos.ru/dop/docs/prikr/docs_prikr_dom_okruga.html)
 * draw all school locations for schools with multiple buildings
-* write scripts to automatically download ratings (RAEX, schoolotzyv.ru)
+* write scripts to automatically download ratings (schoolotzyv.ru)
