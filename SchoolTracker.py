@@ -19,6 +19,13 @@ import pprint
 import string
 import math
 
+def warn(msg):
+  sys.stderr.write('%s: warning: %s\n' % (me, msg))
+
+def error(msg):
+  sys.stderr.write('%s: error: %s\n' % (me, msg))
+  sys.exit(1)
+
 def ensure_module(module, package=None, user=True, quiet=False):
   """
   Installs module if it's missing. Call like
@@ -59,13 +66,6 @@ import xlrd
 
 me = os.path.basename(__file__)
 v = 0
-
-def warn(msg):
-  sys.stderr.write('%s: warning: %s\n' % (me, msg))
-
-def error(msg):
-  sys.stderr.write('%s: error: %s\n' % (me, msg))
-  sys.exit(1)
 
 class Re:
   """
